@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title></title>
+    <style>
+        * {
+            padding: 0;
+            margin: 0;
+            border: 0;
+        }
+        canvas {
+            background: skyblue;
+        }
+    </style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<script src="js/Underscore-min.js"></script>
+<script src="js/simple-inheritence.js"></script>
+</body>
+<script>
+    (function () {
+        window.Game = Class.extend({
+            init: function (option) {
+                var self = this;
+                this.fps = option.fps;
+                this.id = option.id;
+                this.canvas = document.getElementById(option.id);
+                this.context = this.canvas.getContext('2d');
+                this.frame = new FrameTools();
+                this.onLoadImg = new onLoadSource();
+                this.onLoadImg.load('r.json', function (allImage, imgLength, countImage) {
+                    if (imgLength == countImage) {
+                        self.allImage = allImage;
+                        self.run();
+                    }
+                });
+                this.isGameOver = false;
+            },
+            run: function () {
+                var self = this;
+                this.floor = new Background({
+                    img: self.allImage['diban'],
+                    y: self.canvas.height - 48,
+                    width: 48,
+                    height: 48,
+                    speed: 4,
+                });
+                this.tree = new Background({
+                    img: self.allImage['shu'],
+                    y: self.canvas.height - 216 - 48,
+                    width: 300,
+                    height: 216,
+                    speed: 3,
+                });
+                this.house = new Background({
+                    img: self.allImage['fangzi'],
+                    y: self.canvas.height - 256 - 100,
+                    width: 300,
+                    height: 256,
+                    speed: 2,
+                });
+                this.pipeArr = [new Pipe()];
+                this.bird = new Bird();
+                this.time = setInterval(function () {
+                    self.loop();
+                }, 1000 / self.fps);
+            },
+            loop: function () {
+                this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                this.frame.countFrame();
+                this.house.update();
+                this.house.render();
+                this.tree.update();
+                this.tree.render();
+                this.floor.update();
+                this.floor.render();
+                if (this.frame.sumFrame % 85 == 0) {
+                    this.pipeArr.push(new Pipe());
+                }
+                for (var i = 0; i < this.pipeArr.length; i++) {
+                    this.pipeArr[i].update();
+                    this.pipeArr[i].render();
+                }
+                this.context.fillText('FPS/' + this.frame.realFrame, 15, 15);
+                this.context.fillText('FNO/' + this.frame.sumFrame, 15, 30);
+                this.bird.update();
+                this.bird.render();
+            },
+            pause: function () {
+                clearInterval(this.time);
+            },
+            gameOver: function () {
+                this.house.pause();
+                this.tree.pause();
+                this.floor.pause();
+                this.pipeArr.forEach(function (obj, index) {
+                    obj.pause();
+                });
+                this.isGameOver = true;
+                this.bird.die = true;
+            }
+        })
+    })();
+    (function () {
+        window.FrameTools = Class.extend({
+            init: function () {
+                this.beginTime = new Date();
+                this.beginFrame = 0;
+                this.sumFrame = 0;
+                this.realFrame = 0;
+            },
+            countFrame: function () {
+                this.sumFrame++;
+                this.curTime = new Date();
+                if (this.curTime - this.beginTime > 1000) {
+                    this.realFrame = this.sumFrame - this.beginFrame;
+                    this.beginTime = this.curTime;
+                    this.beginFrame = this.sumFrame;
+                }
+            }
+        })
+    })();
+    (function () {
+        window.onLoadSource = Class.extend({
+            init: function () {
+                this.allImageObj = {};
+            },
+            load: function (url, callBack) {
+                var self = this;
+                var xhr = new XMLHttpRequest();
+                xhr.onreadystatechange = function () {
+                    if (xhr.readyState == 4 && xhr.status == 200) {
+                        var countImage = 0;
+                        var data = xhr.responseText;
+                        var JsonData = JSON.parse(data);
+                        var imgArr = JsonData.images;
+                        for (var i = 0; i < imgArr.length; i++) {
+                            var img = new Image();
+                            img.src = imgArr[i].src;
+                            img.index = i;
+                            img.onload = function () {
+                                countImage++;
+                                var imgName = imgArr[this.index].name;
+                                self.allImageObj[imgName] = this;
+                                callBack(self.allImageObj, imgArr.length, countImage);
+                            }
+                        }
+                    }
+                };
+                xhr.open('GET', url);
+                xhr.send();
+            }
+        })
+    })();
+    (function () {
+        window.Background = Class.extend({
+            init: function (option) {
+                this.img = option.img;
+                this.x = 0;
+                this.y = option.y;
+                this.width = option.width;
+                this.height = option.height;
+                this.speed = option.speed;
+                this.count = parseInt(game.canvas.width / this.width) + 1;
+            },
+            render: function () {
+                for (var i = 0; i < 2 * this.count; i++) {
+                    game.context.drawImage(this.img, this.x + i * this.width, this.y, this.width, this.height);
+                }
+            },
+            update: function () {
+                this.x -= this.speed;
+                if (this.x < -this.count * this.width) {
+                    this.x = 0;
+                }
+            },
+            pause: function () {
+                this.speed = 0;
+            }
+        })
+    })();
+    (function () {
+        window.Pipe = Class.extend({
+            init: function () {
+                this.dir = _.random(0, 1);
+                this.x = game.canvas.width;
+                this.width = 148;
+                this.height = _.random(120, game.canvas.height * 0.5);
+                this.y = this.dir == 0 ? 0 : game.canvas.height - this.height - 48;
+                this.speed = 4;
+            },
+            render: function () {
+                if (this.dir == 1) {
+                    game.context.drawImage(game.allImage['pipe0'], 0, 0, this.width, this.height, this.x, this.y, this.width, this.height);
+                } else if (this.dir == 0) {
+                    game.context.drawImage(game.allImage['pipe1'], 0, 1664 - this.height, this.width, this.height, this.x, this.y, this.width, this.height);
+                }
+            },
+            update: function () {
+                this.x -= this.speed;
+                if (this.x < -this.width) {
+                    game.pipeArr = _.without(game.pipeArr, this);
+                }
+                if ((game.bird.x > this.x - game.bird.width) && (game.bird.x < this.x + this.width)) {
+                    if (this.dir == 0) {
+                        if (game.bird.y < this.height) {
+                            game.gameOver();
+                        }
+                    } else if (this.dir == 1) {
+                        if (game.bird.y > this.y - game.bird.height) {
+                            game.gameOver();
+                        }
+                    }
+                }
+            },
+            pause: function () {
+                this.speed = 0;
+            }
+        })
+    })();
+    (function () {
+        window.Bird = Class.extend({
+            init: function () {
+                this.width = 85;
+                this.x = game.canvas.width * 0.5 - this.width * 0.5;
+                this.height = 60;
+                this.y = (game.canvas.height - this.height) * 0.3;
+                this.state = 0;
+                this.g = 0;
+                this.dir = 0;
+                this.dropFrame = game.frame.sumFrame;
+                this.nowel = 1;
+                this.rotateAngle = 0;
+                this.die = false;
+                this.animationIndex = 0;
+                this.click();
+            },
+            render: function () {
+                if (this.die) {
+                    var width = 325;
+                    var height = 138;
+                    var row = parseInt(this.animationIndex / 5);
+                    var rol = this.animationIndex % 5;
+                    game.context.drawImage(game.allImage['blood'], rol * width, row * height, width, height, this.x - 100, this.y, width, height);
+                    game.context.drawImage(game.allImage['gameover'], 0, 0, 626, 144, (game.canvas.width - 626) * 0.5, (game.canvas.height - 144) * 0.5, 626, 144);
+                    return;
+                }
+                game.context.save();
+                game.context.translate(this.x + this.width * 0.5, this.y + this.height * 0.5);
+                game.context.rotate(this.rotateAngle / 180 * Math.PI);
+                game.context.translate(-(this.x + this.width * 0.5), -(this.y + this.height * 0.5));
+                game.context.drawImage(game.allImage['bird'], this.state * this.width, 0, this.width, this.height, this.x, this.y, this.width, this.height);
+                game.context.restore();
+            },
+            update: function () {
+                if (this.die) {
+                    this.animationIndex++;
+                    if (this.animationIndex == 30) {
+                        game.pause();
+                        return;
+                    }
+                }
+                this.rotateAngle++;
+                if (game.frame.sumFrame % 5 == 0) {
+                    this.state++;
+                    if (this.state == 2) {
+                        this.state = 0;
+                    }
+                }
+                if (this.dir == 0) {
+                    this.g = 0.0005 * 9.8 * Math.pow(game.frame.sumFrame - this.dropFrame, 2);
+                }else if (this.dir == 1) {
+                    this.nowel++;
+                    this.g = -15 + this.nowel;
+                    if (this.g > 0) {
+                        this.dir = 0;
+                        this.dropFrame = game.frame.sumFrame;
+                    }
+                }
+                if (this.y <= 0) {
+                    this.x -= 5;
+                    this.y = 0;
+                }
+                if (this.y > game.canvas.height - 48 - this.height) {
+                    game.gameOver();
+                }
+                if(!this.die)
+                this.y += this.g;
+            },
+            click: function () {
+                var self = this;
+                game.canvas.addEventListener('mousedown', function () {
+                    self.dir = 1;
+                    self.rotateAngle = -25;
+                    self.nowel = 1;
+                })
+            }
+        });
+    })();
+    var game = new Game({
+        fps: 70,
+        id: 'canvas',
+    });
+    game.canvas.width = window.innerWidth;
+    game.canvas.height = window.innerHeight;
+</script>
+</html>
